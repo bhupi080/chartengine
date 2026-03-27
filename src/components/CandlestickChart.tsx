@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import {
   createChart,
   CandlestickSeries,
+  BarSeries,
+  LineSeries,
+  AreaSeries,
+  BaselineSeries,
   HistogramSeries,
   CrosshairMode,
   ColorType,
@@ -11,10 +15,12 @@ import {
   type Time,
 } from "lightweight-charts"
 import type { OHLCRow } from "@/server/ohlc"
+import type { ChartType } from "@/components/ChartTypeSelector"
 
-type CandlestickChartProps = {
+type OHLCChartProps = {
   data: OHLCRow[]
   symbol: string
+  chartType: ChartType
 }
 
 type OHLCLegend = {
@@ -55,15 +61,17 @@ function formatVolume(v: number): string {
 
 const UP_COLOR = "#26a69a"
 const DOWN_COLOR = "#ef5350"
+const LINE_COLOR = "#2962FF"
 const VOLUME_UP = "rgba(38, 166, 154, 0.3)"
 const VOLUME_DOWN = "rgba(239, 83, 80, 0.3)"
 
-export function CandlestickChart({ data, symbol }: CandlestickChartProps) {
+export function OHLCChart({ data, symbol, chartType }: OHLCChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const [legend, setLegend] = useState<OHLCLegend>(null)
 
   const lastBar = data.length > 0 ? data[data.length - 1] : null
+  const isOHLC = chartType === "candlestick" || chartType === "bar"
 
   const updateLegend = useCallback(
     (bar: OHLCRow | null) => {
@@ -135,23 +143,84 @@ export function CandlestickChart({ data, symbol }: CandlestickChartProps) {
       height: container.clientHeight || 600,
     })
 
-    const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: UP_COLOR,
-      downColor: DOWN_COLOR,
-      borderVisible: false,
-      wickUpColor: UP_COLOR,
-      wickDownColor: DOWN_COLOR,
-    })
+    let mainSeries: ISeriesApi<SeriesType>
 
-    candleSeries.setData(
-      data.map((d) => ({
-        time: d.time as Time,
-        open: d.open,
-        high: d.high,
-        low: d.low,
-        close: d.close,
-      })),
-    )
+    const ohlcData = data.map((d) => ({
+      time: d.time as Time,
+      open: d.open,
+      high: d.high,
+      low: d.low,
+      close: d.close,
+    }))
+
+    const singleData = data.map((d) => ({
+      time: d.time as Time,
+      value: d.close,
+    }))
+
+    switch (chartType) {
+      case "candlestick": {
+        const s = chart.addSeries(CandlestickSeries, {
+          upColor: UP_COLOR,
+          downColor: DOWN_COLOR,
+          borderVisible: false,
+          wickUpColor: UP_COLOR,
+          wickDownColor: DOWN_COLOR,
+        })
+        s.setData(ohlcData)
+        mainSeries = s as unknown as ISeriesApi<SeriesType>
+        break
+      }
+      case "bar": {
+        const s = chart.addSeries(BarSeries, {
+          upColor: UP_COLOR,
+          downColor: DOWN_COLOR,
+        })
+        s.setData(ohlcData)
+        mainSeries = s as unknown as ISeriesApi<SeriesType>
+        break
+      }
+      case "line": {
+        const s = chart.addSeries(LineSeries, {
+          color: LINE_COLOR,
+          lineWidth: 2,
+        })
+        s.setData(singleData)
+        mainSeries = s as unknown as ISeriesApi<SeriesType>
+        break
+      }
+      case "area": {
+        const s = chart.addSeries(AreaSeries, {
+          lineColor: LINE_COLOR,
+          topColor: "rgba(41, 98, 255, 0.28)",
+          bottomColor: "rgba(41, 98, 255, 0.05)",
+          lineWidth: 2,
+        })
+        s.setData(singleData)
+        mainSeries = s as unknown as ISeriesApi<SeriesType>
+        break
+      }
+      case "baseline": {
+        const midPrice =
+          data.length > 0
+            ? (Math.max(...data.map((d) => d.high)) +
+                Math.min(...data.map((d) => d.low))) /
+              2
+            : 0
+        const s = chart.addSeries(BaselineSeries, {
+          baseValue: { type: "price" as const, price: midPrice },
+          topLineColor: UP_COLOR,
+          topFillColor1: "rgba(38, 166, 154, 0.28)",
+          topFillColor2: "rgba(38, 166, 154, 0.05)",
+          bottomLineColor: DOWN_COLOR,
+          bottomFillColor1: "rgba(239, 83, 80, 0.05)",
+          bottomFillColor2: "rgba(239, 83, 80, 0.28)",
+        })
+        s.setData(singleData)
+        mainSeries = s as unknown as ISeriesApi<SeriesType>
+        break
+      }
+    }
 
     const volumeSeries = chart.addSeries(HistogramSeries, {
       priceFormat: { type: "volume" as const },
@@ -170,11 +239,6 @@ export function CandlestickChart({ data, symbol }: CandlestickChartProps) {
       })),
     )
 
-    candleSeries.priceScale().applyOptions({
-      autoScale: true,
-      scaleMargins: { top: 0.1, bottom: 0.25 },
-    })
-
     chart.timeScale().fitContent()
 
     chart.subscribeCrosshairMove((param) => {
@@ -183,24 +247,40 @@ export function CandlestickChart({ data, symbol }: CandlestickChartProps) {
         return
       }
 
-      const candleData = param.seriesData.get(
-        candleSeries as unknown as ISeriesApi<SeriesType>,
-      ) as { open: number; high: number; low: number; close: number } | undefined
-
+      const mainData = param.seriesData.get(mainSeries)
       const volumeData = param.seriesData.get(
         volumeSeries as unknown as ISeriesApi<SeriesType>,
       ) as { value: number } | undefined
 
-      if (candleData) {
-        const bar: OHLCRow = {
-          time: param.time as number,
-          open: candleData.open,
-          high: candleData.high,
-          low: candleData.low,
-          close: candleData.close,
-          volume: volumeData?.value ?? 0,
+      if (mainData) {
+        const vol = volumeData?.value ?? 0
+
+        if ("open" in mainData) {
+          const d = mainData as {
+            open: number
+            high: number
+            low: number
+            close: number
+          }
+          updateLegend({
+            time: param.time as number,
+            open: d.open,
+            high: d.high,
+            low: d.low,
+            close: d.close,
+            volume: vol,
+          })
+        } else if ("value" in mainData) {
+          const d = mainData as { value: number }
+          updateLegend({
+            time: param.time as number,
+            open: d.value,
+            high: d.value,
+            low: d.value,
+            close: d.value,
+            volume: vol,
+          })
         }
-        updateLegend(bar)
       }
     })
 
@@ -221,38 +301,55 @@ export function CandlestickChart({ data, symbol }: CandlestickChartProps) {
       chart.remove()
       chartRef.current = null
     }
-  }, [data, lastBar, updateLegend])
+  }, [data, chartType, lastBar, updateLegend])
 
   return (
     <div className="relative flex h-full w-full flex-1 flex-col">
-      {/* OHLC Legend overlay */}
       <div className="pointer-events-none absolute left-3 top-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
         <span className="font-semibold text-foreground">
           {symbol.toUpperCase()}
         </span>
         {legend && (
           <>
+            {isOHLC && (
+              <>
+                <span className="text-muted-foreground">
+                  O{" "}
+                  <span
+                    className={
+                      legend.isUp ? "text-[#26a69a]" : "text-[#ef5350]"
+                    }
+                  >
+                    {formatNumber(legend.open)}
+                  </span>
+                </span>
+                <span className="text-muted-foreground">
+                  H{" "}
+                  <span
+                    className={
+                      legend.isUp ? "text-[#26a69a]" : "text-[#ef5350]"
+                    }
+                  >
+                    {formatNumber(legend.high)}
+                  </span>
+                </span>
+                <span className="text-muted-foreground">
+                  L{" "}
+                  <span
+                    className={
+                      legend.isUp ? "text-[#26a69a]" : "text-[#ef5350]"
+                    }
+                  >
+                    {formatNumber(legend.low)}
+                  </span>
+                </span>
+              </>
+            )}
             <span className="text-muted-foreground">
-              O{" "}
-              <span className={legend.isUp ? "text-[#26a69a]" : "text-[#ef5350]"}>
-                {formatNumber(legend.open)}
-              </span>
-            </span>
-            <span className="text-muted-foreground">
-              H{" "}
-              <span className={legend.isUp ? "text-[#26a69a]" : "text-[#ef5350]"}>
-                {formatNumber(legend.high)}
-              </span>
-            </span>
-            <span className="text-muted-foreground">
-              L{" "}
-              <span className={legend.isUp ? "text-[#26a69a]" : "text-[#ef5350]"}>
-                {formatNumber(legend.low)}
-              </span>
-            </span>
-            <span className="text-muted-foreground">
-              C{" "}
-              <span className={legend.isUp ? "text-[#26a69a]" : "text-[#ef5350]"}>
+              {isOHLC ? "C " : "Price "}
+              <span
+                className={legend.isUp ? "text-[#26a69a]" : "text-[#ef5350]"}
+              >
                 {formatNumber(legend.close)}
               </span>
             </span>
@@ -262,7 +359,8 @@ export function CandlestickChart({ data, symbol }: CandlestickChartProps) {
               }
             >
               {legend.change >= 0 ? "+" : ""}
-              {formatNumber(legend.change)} ({formatNumber(legend.changePercent)}%)
+              {formatNumber(legend.change)} ({formatNumber(legend.changePercent)}
+              %)
             </span>
             <span className="text-muted-foreground">
               Vol{" "}
@@ -274,7 +372,6 @@ export function CandlestickChart({ data, symbol }: CandlestickChartProps) {
         )}
       </div>
 
-      {/* Chart container - fills remaining space */}
       <div ref={containerRef} className="w-full flex-1" />
     </div>
   )

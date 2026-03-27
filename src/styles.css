@@ -128,3 +128,8 @@
     @apply font-sans;
     }
 }
+
+@keyframes chartPulse {
+  0%, 100% { opacity: 0.3; transform: scaleY(0.7); }
+  50% { opacity: 1; transform: scaleY(1); }
+}

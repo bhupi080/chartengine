@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { CaretDown, Check } from "@phosphor-icons/react"
+import { CaretDown, Check, MagnifyingGlass } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 
 type SymbolSelectorProps = {
@@ -14,33 +14,43 @@ export function SymbolSelector({
   onSelect,
 }: SymbolSelectorProps) {
   const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState("")
   const ref = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false)
+        setSearch("")
       }
     }
     document.addEventListener("mousedown", handleClick)
     return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
+  useEffect(() => {
+    if (open) inputRef.current?.focus()
+  }, [open])
+
+  const filtered = search
+    ? symbols.filter((s) => s.toLowerCase().includes(search.toLowerCase()))
+    : symbols
+
   return (
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
-          "flex h-9 min-w-[180px] items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium",
-          "outline-none transition-colors",
-          "hover:bg-muted focus:border-ring focus:ring-[3px] focus:ring-ring/50",
+          "flex h-8 items-center gap-1.5 rounded px-2 text-sm font-semibold transition-colors",
+          "hover:bg-muted",
+          selected ? "text-foreground" : "text-muted-foreground",
         )}
       >
-        <span className={selected ? "text-foreground" : "text-muted-foreground"}>
-          {selected ? selected.toUpperCase() : "Select a symbol\u2026"}
-        </span>
+        {selected ? selected.toUpperCase() : "Symbol"}
         <CaretDown
-          size={14}
+          size={12}
+          weight="bold"
           className={cn(
             "text-muted-foreground transition-transform",
             open && "rotate-180",
@@ -49,32 +59,52 @@ export function SymbolSelector({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 max-h-64 min-w-[180px] overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-lg">
-          {symbols.map((symbol) => (
-            <button
-              key={symbol}
-              onClick={() => {
-                onSelect(symbol)
-                setOpen(false)
-              }}
-              className={cn(
-                "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors",
-                "hover:bg-muted",
-                selected === symbol
-                  ? "font-medium text-foreground"
-                  : "text-muted-foreground",
-              )}
-            >
-              <Check
-                size={14}
-                className={cn(
-                  "shrink-0",
-                  selected === symbol ? "opacity-100" : "opacity-0",
-                )}
-              />
-              {symbol.toUpperCase()}
-            </button>
-          ))}
+        <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-lg border border-border bg-card shadow-xl">
+          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+            <MagnifyingGlass size={14} className="text-muted-foreground" />
+            <input
+              ref={inputRef}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search symbol…"
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+          </div>
+          <div className="max-h-64 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                No symbols found
+              </p>
+            ) : (
+              filtered.map((symbol) => (
+                <button
+                  key={symbol}
+                  onClick={() => {
+                    onSelect(symbol)
+                    setOpen(false)
+                    setSearch("")
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors",
+                    "hover:bg-muted",
+                    selected === symbol
+                      ? "font-medium text-foreground"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  <Check
+                    size={14}
+                    weight="bold"
+                    className={cn(
+                      "shrink-0",
+                      selected === symbol ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  {symbol.toUpperCase()}
+                </button>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>
