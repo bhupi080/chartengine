@@ -46,6 +46,18 @@ function App() {
     return ohlcData.filter((d) => d.time >= fromTs && d.time <= toTs)
   }, [ohlcData, fromDate, toDate])
 
+  function toInputDateFromUnix(ts: number): string {
+    return new Date(ts * 1000).toISOString().slice(0, 10)
+  }
+
+  function applyQuickRange(days: number) {
+    if (ohlcData.length === 0) return
+    const latestTs = ohlcData[ohlcData.length - 1].time
+    const fromTs = latestTs - days * 24 * 60 * 60
+    setFromDate(toInputDateFromUnix(fromTs))
+    setToDate(toInputDateFromUnix(latestTs))
+  }
+
   async function handleSelect(symbol: string) {
     setSelected(symbol)
     setLoading(true)
@@ -98,6 +110,30 @@ function App() {
                 setToDate("")
               }}
             />
+
+            <div className="mx-1 h-5 w-px bg-border" />
+
+            {/* Quick ranges */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => applyQuickRange(1)}
+                className="rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                1D
+              </button>
+              <button
+                onClick={() => applyQuickRange(7)}
+                className="rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                1W
+              </button>
+              <button
+                onClick={() => applyQuickRange(30)}
+                className="rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                1M
+              </button>
+            </div>
 
             <div className="mx-1 h-5 w-px bg-border" />
 
