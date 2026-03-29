@@ -6,8 +6,6 @@ import {
 } from "@tanstack/react-router"
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools"
 import { TanStackDevtools } from "@tanstack/react-devtools"
-import { Navbar } from "@/components/Navbar"
-
 import appCss from "../styles.css?url"
 
 const THEME_INIT = `(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t='dark';localStorage.setItem('theme',t)}document.documentElement.classList.add(t)}catch(e){document.documentElement.classList.add('dark')}})();`
@@ -40,7 +38,6 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <div className="flex h-svh flex-col overflow-hidden bg-background text-foreground">
-      <Navbar />
       <main className="flex flex-1 flex-col overflow-hidden">
         <Outlet />
       </main>
